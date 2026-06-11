@@ -1,0 +1,153 @@
+.css-search-container {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+}
+
+.css-search-wrapper {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  padding: 4px 8px;
+  box-sizing: border-box;
+  width: calc(100% - 12px);
+  margin: 0px 6px;
+  border-radius: 6px;
+  top: 6px;
+  left: 0px;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  background-color: hsla(0, 0%, 100%, 0.6);
+  border: 1px solid #adadad;
+}
+
+.css-search-toggle {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+
+.css-search-container .icon-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 4px;
+  background: transparent;
+  border-radius: 4px;
+  border: 0;
+}
+.css-search-container .icon-container svg {
+  width: 16px;
+  height: 16px;
+}
+.css-search-container .icon-container:hover {
+  background: #e0e0e0;
+}
+
+.css-search-bar {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.css-search-input-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.css-search-count {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: #666;
+  text-align: center;
+}
+
+.css-search-input {
+  width: 100%;
+  max-width: 520px;
+  box-sizing: border-box;
+  padding: 6px 10px;
+  font-family: Courier, Courier New, monospace;
+  line-height: 22px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  font-size: 12px;
+  outline: none;
+}
+
+.css-search-input:focus {
+  border-color: #2684ff;
+  box-shadow: 0 0 0 3px rgba(38, 132, 255, 0.15);
+}
+
+.css-search-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.css-search-credit {
+  display: flex;
+  width: 100%;
+  justify-content: end;
+  margin-top: 4px;
+  font-size: 10px;
+  text-decoration: none;
+  border-bottom: 0px;
+  margin: 0px;
+  margin-top: 4px;
+  padding: 0px;
+}
+
+.css-search-credit-text {
+  margin:0px;
+  padding:0px;
+  font-size: 10px;
+  color: #888;
+  text-decoration: none;
+  border-bottom: 0px;
+  margin: 0px;
+  padding: 0px;
+}
+.css-search-credit-text a {
+  text-decoration: none;
+  color: #555;
+  border-bottom: 0px;
+}
+.css-search-credit-text a:hover {
+  color: black;
+}
+
+.css-search-hit {
+  background: #ffeb3b66;
+  outline: 1px solid #f1c40f;
+  border-radius: 2px;
+}
+
+.css-search-hit--active {
+  background: #ffeb3bb0;
+  outline: 2px solid #f39c12;
+}
+
+.css-search--hidden .css-search-wrapper {
+  display: none;
+}
+
+.css-search--hidden .css-search-toggle {
+  display: inline-block;
+}
+
+.css-search--shown .css-search-wrapper {
+  display: flex;
+}
+
+.css-search--shown .css-search-toggle {
+  display: none;
+}
