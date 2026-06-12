@@ -1,153 +1,177 @@
+/* ===========================================================================
+   SDL Code Search — VS Code-style find widget for the Squarespace code editors
+   The container is a zero-height sticky anchor pinned to the top of the
+   CodeMirror editor, so it never pushes or blocks the code below it.
+   =========================================================================== */
+
 .css-search-container {
   position: sticky;
   top: 0;
   z-index: 6;
+  height: 0;            /* anchor only — takes no vertical space */
+  pointer-events: none; /* let clicks fall through the empty strip... */
+}
+.css-search-container > * {
+  pointer-events: auto; /* ...but keep the icon/widget interactive */
 }
 
-.css-search-wrapper {
-  position: absolute;
-  display: flex;
-  flex-direction: column;
-  padding: 4px 8px;
-  box-sizing: border-box;
-  width: calc(100% - 12px);
-  margin: 0px 6px;
-  border-radius: 6px;
-  top: 6px;
-  left: 0px;
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-  background-color: hsla(0, 0%, 100%, 0.6);
-  border: 1px solid #adadad;
-}
-
+/* ---- Collapsed state: just a search icon, top-right ---- */
 .css-search-toggle {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 8px;
+  right: 14px;
+  background: rgba(127, 127, 127, 0.18);
+}
+
+/* ---- Expanded state: floating compact widget, top-right ---- */
+.css-search-wrapper {
+  position: absolute;
+  top: 6px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-sizing: border-box;
+  width: 360px;
+  max-width: calc(100% - 24px);
+  padding: 5px 6px 6px;
+  border-radius: 6px;
+  background: #1e1e1e;
+  border: 1px solid #454545;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.36);
+}
+
+.css-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.css-search-input-container {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0 4px 0 6px;
+  background: #3c3c3c;
+  border: 1px solid transparent;
+  border-radius: 3px;
+}
+.css-search-input-container:focus-within {
+  border-color: #007fd4;
+}
+.css-search-input-container.is-invalid {
+  border-color: #be1100;
+}
+
+.css-search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 2px 4px;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: #cccccc;
+  font-family: Menlo, Consolas, "Courier New", monospace;
+  font-size: 12px;
+  line-height: 22px;
+}
+.css-search-input::placeholder {
+  color: #a6a6a6;
+}
+
+.css-search-count {
+  flex: 0 0 auto;
+  padding-left: 6px;
+  font-size: 11px;
+  color: #cccccc;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
+.css-search-options,
+.css-search-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
 }
 
 .css-search-container .icon-container {
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
   cursor: pointer;
-  padding: 4px;
   background: transparent;
-  border-radius: 4px;
   border: 0;
-}
-.css-search-container .icon-container svg {
-  width: 16px;
-  height: 16px;
+  border-radius: 4px;
+  color: #c5c5c5;
 }
 .css-search-container .icon-container:hover {
-  background: #e0e0e0;
+  background: rgba(255, 255, 255, 0.12);
+}
+.css-search-container .icon-container svg {
+  width: 15px;
+  height: 15px;
 }
 
-.css-search-bar {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: 4px;
-}
-
-.css-search-input-container {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.css-search-count {
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
+/* Option toggles: Aa (case) / ab (whole word) / .* (regex) */
+.css-search-opt {
+  width: 22px;
+  height: 22px;
   font-size: 12px;
-  color: #666;
-  text-align: center;
+  font-weight: 600;
+  line-height: 1;
 }
-
-.css-search-input {
-  width: 100%;
-  max-width: 520px;
-  box-sizing: border-box;
-  padding: 6px 10px;
-  font-family: Courier, Courier New, monospace;
-  line-height: 22px;
-  border-radius: 6px;
-  border: 1px solid #ccc;
-  font-size: 12px;
-  outline: none;
+.css-search-opt[data-opt="word"] {
+  text-decoration: underline;
 }
-
-.css-search-input:focus {
-  border-color: #2684ff;
-  box-shadow: 0 0 0 3px rgba(38, 132, 255, 0.15);
-}
-
-.css-search-nav {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+.css-search-opt.is-active {
+  background: rgba(0, 127, 212, 0.45);
+  color: #ffffff;
 }
 
 .css-search-credit {
-  display: flex;
-  width: 100%;
-  justify-content: end;
-  margin-top: 4px;
+  margin: 0;
+  padding: 0 2px;
+  text-align: right;
   font-size: 10px;
-  text-decoration: none;
-  border-bottom: 0px;
-  margin: 0px;
-  margin-top: 4px;
-  padding: 0px;
 }
-
 .css-search-credit-text {
-  margin:0px;
-  padding:0px;
-  font-size: 10px;
-  color: #888;
-  text-decoration: none;
-  border-bottom: 0px;
-  margin: 0px;
-  padding: 0px;
+  color: #8c8c8c;
 }
 .css-search-credit-text a {
+  color: #9cdcfe;
   text-decoration: none;
-  color: #555;
-  border-bottom: 0px;
+  border-bottom: 0;
 }
 .css-search-credit-text a:hover {
-  color: black;
+  text-decoration: underline;
 }
 
+/* ---- Match highlights inside the code ---- */
 .css-search-hit {
-  background: #ffeb3b66;
-  outline: 1px solid #f1c40f;
-  border-radius: 2px;
+  background: rgba(234, 92, 0, 0.33);
+  outline: 1px solid rgba(246, 178, 107, 0.8);
+  border-radius: 1px;
 }
-
 .css-search-hit--active {
-  background: #ffeb3bb0;
-  outline: 2px solid #f39c12;
+  background: rgba(234, 92, 0, 0.66);
+  outline: 1px solid #f6b26b;
 }
 
+/* ---- Show / hide ---- */
 .css-search--hidden .css-search-wrapper {
   display: none;
 }
-
 .css-search--hidden .css-search-toggle {
-  display: inline-block;
+  display: flex;
 }
-
 .css-search--shown .css-search-wrapper {
   display: flex;
 }
-
 .css-search--shown .css-search-toggle {
   display: none;
 }

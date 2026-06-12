@@ -16,15 +16,15 @@
   var doc = win.document;
 
   // ===== Module state =====
-  // We attach one independent search box per CodeMirror editor on the page.
-  // The custom CSS pages have a single editor; the code-injection page has
+  // One independent search widget is attached per CodeMirror editor on the
+  // page. Custom CSS pages have a single editor; the code-injection page has
   // two (header + footer), so instances are tracked as a list.
-  var instances = []; // [{ cmRoot, setOpen, isOpen, destroy }, ...]
+  var instances = []; // [{ cmRoot, containerEl, setOpen, isOpen, destroy }]
   var locationPollHandle = null;
   var lastPathname = null;
   var globalKeydownHandler = null;
 
-  // ===== Small shared helpers =====
+  // ===== Shared helpers =====
   function escapeRegExp(input) {
     return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
@@ -64,8 +64,7 @@
     });
   }
 
-  // Builds a friendly placeholder by looking for a nearby field label.
-  // Falls back to a generic label when nothing meaningful is found.
+  // Builds a friendly placeholder from a nearby field label.
   function detectEditorLabel(cmRoot) {
     try {
       var node = cmRoot.parentElement;
@@ -83,48 +82,57 @@
 
   var ICONS = {
     search:
-      '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-search-icon lucide-search"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>',
-    up: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-up-icon lucide-chevron-up"><path d="m18 15-6-6-6 6"/></svg>',
-    down: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-down-icon lucide-chevron-down"><path d="m6 9 6 6 6-6"/></svg>',
+      '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>',
+    up: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>',
+    down: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
     close:
-      '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x-icon lucide-x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>',
+      '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>',
   };
 
-  function makeIconButton(className, ariaLabel, iconHtml) {
+  function makeIconButton(className, ariaLabel, innerHtml) {
     var btn = doc.createElement("button");
     btn.type = "button";
     btn.className = className + " icon-container";
     btn.setAttribute("aria-label", ariaLabel);
-    btn.innerHTML = iconHtml;
+    btn.title = ariaLabel;
+    btn.innerHTML = innerHtml;
     return btn;
   }
 
+  // Removes any leftover search widgets inside an editor (guards duplicates).
+  function clearWidgetsIn(cmRoot) {
+    var existing = cmRoot.querySelectorAll(".css-search-container");
+    for (var i = 0; i < existing.length; i++) {
+      if (existing[i].parentNode) existing[i].parentNode.removeChild(existing[i]);
+    }
+  }
+
   // ===========================================================================
-  // Per-editor search instance
-  // Each CodeMirror editor on the page gets one of these. It owns its own UI,
-  // highlight state, and event listeners — fully self-contained so multiple
-  // editors (e.g. header + footer) never interfere with one another.
+  // Per-editor search widget. Fully self-contained: its own UI, option state,
+  // highlight state, and listeners, so multiple editors never interfere.
   // ===========================================================================
   function createEditorSearch(cmRoot) {
     var cm = cmRoot.CodeMirror || null;
     var codeRootEl = cmRoot.querySelector(".CodeMirror-code");
 
-    // UI references
-    var containerEl, inputEl, prevBtn, nextBtn, countEl;
+    // Search options (per VS Code find widget)
+    var opts = {caseSensitive: false, wholeWord: false, useRegex: false};
 
     // Highlight state
-    var currentMatches = []; // CodeMirror: [{from,to}]; DOM fallback: [<mark>]
+    var currentMatches = []; // CodeMirror: [{from,to}]; DOM: [<mark>]
     var currentIndex = -1;
     var cmMarks = []; // CodeMirror TextMarker objects
 
+    // Never leave a stale widget behind in this editor.
+    clearWidgetsIn(cmRoot);
+
     // ---- Build UI ----
     var label = detectEditorLabel(cmRoot);
-    var placeholder = "Search " + (label || "code") + "…";
 
     var container = doc.createElement("div");
     container.className = "css-search-container";
 
-    var toggle = makeIconButton("css-search-toggle", "Open search", ICONS.search);
+    var toggle = makeIconButton("css-search-toggle", "Find (Ctrl/Cmd+F)", ICONS.search);
 
     var wrapper = doc.createElement("div");
     wrapper.className = "css-search-wrapper";
@@ -136,27 +144,43 @@
     inputContainer.className = "css-search-input-container";
 
     var input = doc.createElement("input");
-    input.type = "search";
+    input.type = "text";
     input.className = "css-search-input";
-    input.placeholder = placeholder;
+    input.placeholder = "Find" + (label ? " in " + label : "");
     input.autocomplete = "off";
+    input.spellcheck = false;
 
     var count = doc.createElement("span");
     count.className = "css-search-count";
-    count.textContent = "0/0";
+    count.textContent = "";
 
     inputContainer.appendChild(input);
     inputContainer.appendChild(count);
-    bar.appendChild(inputContainer);
+
+    // Option toggles: Aa / ab / .*
+    var options = doc.createElement("div");
+    options.className = "css-search-options";
+    var caseBtn = makeIconButton("css-search-opt", "Match Case", "Aa");
+    caseBtn.setAttribute("data-opt", "case");
+    var wordBtn = makeIconButton("css-search-opt", "Match Whole Word", "ab");
+    wordBtn.setAttribute("data-opt", "word");
+    var regexBtn = makeIconButton("css-search-opt", "Use Regular Expression", ".*");
+    regexBtn.setAttribute("data-opt", "regex");
+    options.appendChild(caseBtn);
+    options.appendChild(wordBtn);
+    options.appendChild(regexBtn);
 
     var nav = doc.createElement("div");
     nav.className = "css-search-nav";
-    var prev = makeIconButton("css-search-arrow", "Previous result", ICONS.up);
-    var next = makeIconButton("css-search-arrow", "Next result", ICONS.down);
-    var close = makeIconButton("css-search-close", "Close search", ICONS.close);
+    var prev = makeIconButton("css-search-arrow", "Previous match (Shift+Enter)", ICONS.up);
+    var next = makeIconButton("css-search-arrow", "Next match (Enter)", ICONS.down);
+    var close = makeIconButton("css-search-close", "Close (Esc)", ICONS.close);
     nav.appendChild(prev);
     nav.appendChild(next);
     nav.appendChild(close);
+
+    bar.appendChild(inputContainer);
+    bar.appendChild(options);
     bar.appendChild(nav);
 
     var credit = doc.createElement("p");
@@ -170,18 +194,32 @@
     container.appendChild(wrapper);
     cmRoot.prepend(container);
 
-    // Expose references used elsewhere in this closure
-    containerEl = container;
-    inputEl = input;
-    prevBtn = prev;
-    nextBtn = next;
-    countEl = count;
+    // ---- Regex construction from input + active options ----
+    function buildRegex(term) {
+      var flags = "g" + (opts.caseSensitive ? "" : "i");
+      var pattern = opts.useRegex ? term : escapeRegExp(term);
+      if (opts.wholeWord) pattern = "\\b(?:" + pattern + ")\\b";
+      try {
+        return new RegExp(pattern, flags);
+      } catch (_e) {
+        return null; // invalid user-supplied regex
+      }
+    }
 
     // ---- Counter ----
-    function updateCounter() {
+    function updateCounter(invalid) {
+      if (invalid) {
+        count.textContent = "Invalid regex";
+        return;
+      }
+      var term = input.value.trim();
+      if (!term) {
+        count.textContent = "";
+        return;
+      }
       var total = currentMatches.length;
-      var indexDisplay = total > 0 && currentIndex >= 0 ? currentIndex + 1 : 0;
-      countEl.textContent = indexDisplay + "/" + total;
+      count.textContent =
+        total === 0 ? "No results" : currentIndex + 1 + "/" + total;
     }
 
     // ---- CodeMirror highlighting (primary path) ----
@@ -194,12 +232,9 @@
       cmMarks = [];
     }
 
-    function highlightUsingCodeMirror(term) {
+    function collectCmMatches(regex) {
       clearCmMarks();
       var text = typeof cm.getValue === "function" ? cm.getValue() : "";
-      var safeTerm = escapeRegExp(term);
-      if (!safeTerm) return;
-      var regex = new RegExp(safeTerm, "gi");
       var ranges = [];
       var match;
       while ((match = regex.exec(text)) !== null) {
@@ -209,13 +244,7 @@
         ranges.push({from: from, to: to});
         if (match[0].length === 0) regex.lastIndex++; // guard zero-length
       }
-      currentMatches = ranges;
-      if (currentMatches.length > 0) {
-        setActiveHit(0, true);
-      } else {
-        currentIndex = -1;
-        updateCounter();
-      }
+      return ranges;
     }
 
     // ---- DOM highlighting (fallback when CodeMirror API is unavailable) ----
@@ -244,16 +273,14 @@
       if (lastIndex < originalText.length) {
         fragment.appendChild(doc.createTextNode(originalText.slice(lastIndex)));
       }
-      if (textNode.parentNode) textNode.parentNode.replaceChild(fragment, textNode);
+      if (textNode.parentNode) {
+        textNode.parentNode.replaceChild(fragment, textNode);
+      }
       return createdMarks;
     }
 
-    function highlightUsingDom(term) {
-      removeHighlights();
-      if (!codeRootEl) return;
-      var safeTerm = escapeRegExp(term);
-      if (!safeTerm) return;
-      var regex = new RegExp(safeTerm, "gi");
+    function collectDomMatches(regex) {
+      if (!codeRootEl) return [];
       var walker = doc.createTreeWalker(codeRootEl, NodeFilter.SHOW_TEXT, {
         acceptNode: function (node) {
           return node.nodeValue && node.nodeValue.trim()
@@ -269,18 +296,32 @@
         var created = wrapMatchesInTextNode(textNodes[i], regex);
         if (created.length) allMarks.push.apply(allMarks, created);
       }
-      currentMatches = allMarks;
+      return allMarks;
+    }
+
+    // ---- Run a search for the current input + options ----
+    function runSearch() {
+      removeHighlights();
+      var term = input.value.trim();
+      if (!term) {
+        updateCounter(false);
+        return;
+      }
+      var regex = buildRegex(term);
+      if (!regex) {
+        inputContainer.classList.add("is-invalid");
+        updateCounter(true);
+        return;
+      }
+      inputContainer.classList.remove("is-invalid");
+
+      currentMatches = cm ? collectCmMatches(regex) : collectDomMatches(regex);
       if (currentMatches.length > 0) {
         setActiveHit(0, true);
       } else {
         currentIndex = -1;
-        updateCounter();
+        updateCounter(false);
       }
-    }
-
-    function highlightTerm(term) {
-      if (cm) highlightUsingCodeMirror(term);
-      else highlightUsingDom(term);
     }
 
     function removeHighlights() {
@@ -297,7 +338,6 @@
       }
       currentMatches = [];
       currentIndex = -1;
-      updateCounter();
     }
 
     // ---- Navigation ----
@@ -334,7 +374,7 @@
           }
         }
       }
-      updateCounter();
+      updateCounter(false);
     }
 
     function goToNext() {
@@ -350,47 +390,63 @@
       );
     }
 
+    // ---- Option toggles ----
+    function toggleOption(key, btn) {
+      opts[key] = !opts[key];
+      btn.classList.toggle("is-active", opts[key]);
+      runSearch();
+      input.focus({preventScroll: true});
+    }
+
     // ---- Open / close ----
     function isOpen() {
-      return containerEl.classList.contains("css-search--shown");
+      return container.classList.contains("css-search--shown");
     }
 
     function setOpen(shouldShow) {
-      containerEl.classList.toggle("css-search--shown", !!shouldShow);
-      containerEl.classList.toggle("css-search--hidden", !shouldShow);
+      container.classList.toggle("css-search--shown", !!shouldShow);
+      container.classList.toggle("css-search--hidden", !shouldShow);
       if (!shouldShow) {
         removeHighlights();
+        updateCounter(false);
         return;
       }
       try {
-        inputEl.focus({preventScroll: true});
-        inputEl.select && inputEl.select();
-        var existingTerm = String(inputEl.value || "").trim();
-        if (existingTerm) highlightTerm(existingTerm);
+        input.focus({preventScroll: true});
+        input.select();
+        if (input.value.trim()) runSearch();
         win.requestAnimationFrame(function () {
           try {
-            inputEl.focus({preventScroll: true});
-            inputEl.select && inputEl.select();
+            input.focus({preventScroll: true});
+            input.select();
           } catch (_e) {}
         });
       } catch (_e) {}
     }
 
     // ---- Events ----
-    input.addEventListener("input", function (e) {
-      var term = e.target && e.target.value ? String(e.target.value).trim() : "";
-      if (!codeRootEl && !cm) return;
-      if (!term) removeHighlights();
-      else highlightTerm(term);
-    });
+    input.addEventListener("input", runSearch);
     input.addEventListener("keydown", function (e) {
       if (e.key === "Enter") {
         e.preventDefault();
-        goToNext();
+        if (e.shiftKey) goToPrev();
+        else goToNext();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        setOpen(false);
       }
     });
     prev.addEventListener("click", goToPrev);
     next.addEventListener("click", goToNext);
+    caseBtn.addEventListener("click", function () {
+      toggleOption("caseSensitive", caseBtn);
+    });
+    wordBtn.addEventListener("click", function () {
+      toggleOption("wholeWord", wordBtn);
+    });
+    regexBtn.addEventListener("click", function () {
+      toggleOption("useRegex", regexBtn);
+    });
     toggle.addEventListener("click", function () {
       setOpen(true);
     });
@@ -398,20 +454,17 @@
       setOpen(false);
     });
 
-    // Start collapsed
+    // Start collapsed (icon only)
     setOpen(false);
 
-    // ---- Public interface ----
     function destroy() {
       removeHighlights();
-      if (containerEl.parentNode) {
-        containerEl.parentNode.removeChild(containerEl);
-      }
+      if (container.parentNode) container.parentNode.removeChild(container);
     }
 
     return {
       cmRoot: cmRoot,
-      containerEl: containerEl,
+      containerEl: container,
       setOpen: setOpen,
       isOpen: isOpen,
       destroy: destroy,
@@ -425,36 +478,42 @@
     return TARGET_PATHS.indexOf(pathname) !== -1;
   }
 
-  // Reconciles the live editors on the page with our active instances:
-  // attaches search to new editors, drops instances whose editor is gone.
+  function isLiveEditor(cmRoot) {
+    // Attached to the DOM and actually visible (not a cached/hidden editor).
+    return doc.contains(cmRoot) && cmRoot.offsetParent !== null;
+  }
+
+  // Reconciles live editors with active instances: attaches to new editors,
+  // drops instances whose editor is gone or hidden, and prunes any duplicate
+  // widgets (fixes the "two search bars after reopen" bug).
   async function syncInstances() {
     if (!isOnTargetPage(win.location.pathname)) {
       teardownAllInstances();
       return;
     }
 
-    var editors = Array.prototype.slice.call(doc.querySelectorAll(".CodeMirror"));
-
-    // Remove instances whose editor was detached from the DOM.
+    // Drop stale instances (detached or hidden editors).
     instances = instances.filter(function (inst) {
-      if (editors.indexOf(inst.cmRoot) === -1 || !doc.contains(inst.cmRoot)) {
+      if (!isLiveEditor(inst.cmRoot)) {
         inst.destroy();
         return false;
       }
       return true;
     });
 
-    if (editors.length === 0) return; // editor not rendered yet; poll will retry
+    var editors = Array.prototype.slice
+      .call(doc.querySelectorAll(".CodeMirror"))
+      .filter(isLiveEditor);
+
+    if (editors.length === 0) return; // not rendered yet; poll will retry
 
     await ensureExternalStylesInjected();
 
     editors.forEach(function (cmRoot) {
-      var alreadyAttached = instances.some(function (inst) {
+      var tracked = instances.some(function (inst) {
         return inst.cmRoot === cmRoot;
       });
-      if (!alreadyAttached) {
-        instances.push(createEditorSearch(cmRoot));
-      }
+      if (!tracked) instances.push(createEditorSearch(cmRoot));
     });
 
     addGlobalKeydownHandler();
@@ -468,7 +527,7 @@
     removeGlobalKeydownHandler();
   }
 
-  // Ctrl/Cmd+F toggles the search box for whichever editor currently has focus.
+  // Ctrl/Cmd+F toggles the widget for whichever editor currently has focus.
   function addGlobalKeydownHandler() {
     if (globalKeydownHandler) return;
     globalKeydownHandler = function (event) {
@@ -479,19 +538,18 @@
         var activeEl = doc.activeElement;
         if (!activeEl) return;
 
-        // Find the instance whose editor (or search UI) contains focus.
         var target = null;
         for (var i = 0; i < instances.length; i++) {
           var inst = instances[i];
-          if (inst.cmRoot.contains(activeEl) || inst.containerEl.contains(activeEl)) {
+          if (
+            inst.cmRoot.contains(activeEl) ||
+            inst.containerEl.contains(activeEl)
+          ) {
             target = inst;
             break;
           }
         }
         if (!target) return;
-
-        // Don't hijack typing inside our own input.
-        if (target.containerEl.contains(activeEl) && !target.isOpen()) return;
 
         event.preventDefault();
         try {
@@ -519,13 +577,9 @@
     lastPathname = win.location.pathname;
     locationPollHandle = win.setInterval(function () {
       var pathname = win.location.pathname;
-      if (pathname !== lastPathname) {
-        lastPathname = pathname;
-        syncInstances();
-      } else if (isOnTargetPage(pathname)) {
-        // Same page, but editors may have (re)rendered — keep them in sync.
-        syncInstances();
-      }
+      if (pathname !== lastPathname) lastPathname = pathname;
+      // Re-sync every tick: handles page changes and editors (re)rendering.
+      syncInstances();
     }, POLL_INTERVAL_MS);
   }
 
