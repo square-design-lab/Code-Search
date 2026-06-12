@@ -7,8 +7,7 @@
     "/config/pages/custom-css-popup",
     "/config/pages/code-injection",
   ];
-  var CSS_URL =
-    "https://cdn.jsdelivr.net/gh/squaredesignlab/css-searchbar@0/css-search.min.css";
+  var CSS_URL = "https://code-search-5wf.pages.dev/plugin.css";
   var POLL_INTERVAL_MS = 800;
 
   // Squarespace renders the editor inside the backend iframe (window.top).
@@ -123,8 +122,10 @@
     var currentIndex = -1;
     var cmMarks = []; // CodeMirror TextMarker objects
 
-    // Never leave a stale widget behind in this editor.
+    // Claim this editor: clear any leftover widget and mark the element so
+    // no other call (concurrent or from a double-loaded script) attaches again.
     clearWidgetsIn(cmRoot);
+    cmRoot.setAttribute("data-sdl-search", "1");
 
     // ---- Build UI ----
     var label = detectEditorLabel(cmRoot);
@@ -460,6 +461,7 @@
     function destroy() {
       removeHighlights();
       if (container.parentNode) container.parentNode.removeChild(container);
+      try { cmRoot.removeAttribute("data-sdl-search"); } catch (_e) {}
     }
 
     return {
@@ -478,21 +480,26 @@
     return TARGET_PATHS.indexOf(pathname) !== -1;
   }
 
+  // An element is "live" as long as it exists in the document.
+  // We intentionally do NOT check offsetParent/visibility — Squarespace's panel
+  // is inside a position:fixed container, which makes offsetParent null even
+  // when the editor is fully visible. Only remove an instance when the element
+  // is actually detached from the DOM.
   function isLiveEditor(cmRoot) {
-    // Attached to the DOM and actually visible (not a cached/hidden editor).
-    return doc.contains(cmRoot) && cmRoot.offsetParent !== null;
+    return doc.contains(cmRoot);
   }
 
-  // Reconciles live editors with active instances: attaches to new editors,
-  // drops instances whose editor is gone or hidden, and prunes any duplicate
-  // widgets (fixes the "two search bars after reopen" bug).
+  // Reconciles live editors with active instances: attaches to new editors and
+  // drops instances whose editor has been removed from the DOM.
+  // A data attribute on each cmRoot prevents any duplicate widget even if this
+  // function is called concurrently or the script tag runs more than once.
   async function syncInstances() {
     if (!isOnTargetPage(win.location.pathname)) {
       teardownAllInstances();
       return;
     }
 
-    // Drop stale instances (detached or hidden editors).
+    // Drop instances whose editor was removed from the DOM.
     instances = instances.filter(function (inst) {
       if (!isLiveEditor(inst.cmRoot)) {
         inst.destroy();
@@ -501,19 +508,22 @@
       return true;
     });
 
-    var editors = Array.prototype.slice
-      .call(doc.querySelectorAll(".CodeMirror"))
-      .filter(isLiveEditor);
+    var editors = Array.prototype.slice.call(doc.querySelectorAll(".CodeMirror"));
+    editors = editors.filter(isLiveEditor);
 
     if (editors.length === 0) return; // not rendered yet; poll will retry
 
     await ensureExternalStylesInjected();
 
     editors.forEach(function (cmRoot) {
-      var tracked = instances.some(function (inst) {
+      // Dual guard: check both the instances array AND the DOM attribute so
+      // that concurrent calls or a double-loaded script can never attach twice.
+      var alreadyTracked = instances.some(function (inst) {
         return inst.cmRoot === cmRoot;
       });
-      if (!tracked) instances.push(createEditorSearch(cmRoot));
+      if (!alreadyTracked && !cmRoot.hasAttribute("data-sdl-search")) {
+        instances.push(createEditorSearch(cmRoot));
+      }
     });
 
     addGlobalKeydownHandler();
