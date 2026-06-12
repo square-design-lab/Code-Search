@@ -1,46 +1,56 @@
 /* ===========================================================================
    SDL Code Search — VS Code-style find widget for the Squarespace code editors
-   The container is a zero-height sticky anchor pinned to the top of the
-   CodeMirror editor, so it never pushes or blocks the code below it.
    =========================================================================== */
 
+/* Zero-height absolute overlay pinned to the top-left of the CodeMirror root.
+   position:absolute (not sticky) keeps us out of CodeMirror's layout flow
+   while still overlaying the code content.                                    */
 .code-search-container {
-  position: sticky;
+  position: absolute;
   top: 0;
-  z-index: 6;
-  height: 0;            /* anchor only — takes no vertical space */
-  pointer-events: none; /* let clicks fall through the empty strip... */
+  left: 0;
+  right: 0;
+  height: 0;
+  z-index: 9;
+  pointer-events: none;
+  overflow: visible;
 }
 .code-search-container > * {
-  pointer-events: auto; /* ...but keep the icon/widget interactive */
+  pointer-events: auto;
 }
 
-/* ---- Collapsed state: just a search icon, top-right ---- */
+/* ---- Collapsed: search icon in the top-right corner ---- */
 .code-search-toggle {
   position: absolute;
   top: 8px;
-  right: 14px;
-  background: rgba(127, 127, 127, 0.18);
+  right: 20px; /* keep clear of CodeMirror's scrollbar (~15 px wide) */
+  padding: 5px;
+  background: rgba(30, 30, 30, 0.82);
+  border: 1px solid #555;
+  border-radius: 6px;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
 }
 
-/* ---- Expanded state: floating compact widget, top-right ---- */
+/* ---- Expanded: compact dark widget, top-right ---- */
 .code-search-wrapper {
   position: absolute;
   top: 6px;
-  right: 12px;
+  right: 4px;
   display: flex;
   flex-direction: column;
   gap: 4px;
   box-sizing: border-box;
-  width: 360px;
-  max-width: calc(100% - 24px);
-  padding: 5px 6px 6px;
+  width: 420px;
+  max-width: calc(100% - 8px); /* never wider than the editor minus 4 px each side */
+  padding: 5px 8px 6px;
   border-radius: 6px;
   background: #1e1e1e;
   border: 1px solid #454545;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.36);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
+/* ---- Bar row: [input] [count] [↑ ↓ ✕] ---- */
 .code-search-bar {
   display: flex;
   align-items: center;
@@ -52,7 +62,7 @@
   align-items: center;
   flex: 1 1 auto;
   min-width: 0;
-  padding: 0 4px 0 6px;
+  padding: 0 6px;
   background: #3c3c3c;
   border: 1px solid transparent;
   border-radius: 3px;
@@ -67,7 +77,7 @@
 .code-search-input {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 2px 4px;
+  padding: 3px 4px;
   background: transparent;
   border: 0;
   outline: 0;
@@ -77,25 +87,26 @@
   line-height: 22px;
 }
 .code-search-input::placeholder {
-  color: #a6a6a6;
+  color: #888;
 }
 
+/* Count lives between the input wrapper and the nav buttons */
 .code-search-count {
   flex: 0 0 auto;
-  padding-left: 6px;
+  min-width: 34px;
+  text-align: center;
   font-size: 11px;
-  color: #cccccc;
+  color: #bbbbbb;
   white-space: nowrap;
-  opacity: 0.85;
 }
 
-.code-search-options,
 .code-search-nav {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 1px;
 }
 
+/* Shared icon button style */
 .code-search-container .icon-container {
   display: flex;
   align-items: center;
@@ -108,6 +119,7 @@
   border: 0;
   border-radius: 4px;
   color: #c5c5c5;
+  flex-shrink: 0;
 }
 .code-search-container .icon-container:hover {
   background: rgba(255, 255, 255, 0.12);
@@ -117,22 +129,15 @@
   height: 15px;
 }
 
-/* Option toggles: Aa (case) / ab (whole word) / .* (regex) */
-.code-search-opt {
-  width: 22px;
-  height: 22px;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1;
-}
-.code-search-opt[data-opt="word"] {
-  text-decoration: underline;
-}
-.code-search-opt.is-active {
-  background: rgba(0, 127, 212, 0.45);
-  color: #ffffff;
+/* ---- Status message (No results / Invalid expression) ---- */
+.code-search-message {
+  font-size: 10px;
+  color: #aaaaaa;
+  padding: 0 2px;
+  line-height: 1.4;
 }
 
+/* ---- Credit ---- */
 .code-search-credit {
   margin: 0;
   padding: 0 2px;
@@ -140,10 +145,10 @@
   font-size: 10px;
 }
 .code-search-credit-text {
-  color: #8c8c8c;
+  color: #666;
 }
 .code-search-credit-text a {
-  color: #9cdcfe;
+  color: #7aa0c4;
   text-decoration: none;
   border-bottom: 0;
 }
@@ -151,10 +156,10 @@
   text-decoration: underline;
 }
 
-/* ---- Match highlights inside the code ---- */
+/* ---- Match highlights inside CodeMirror ---- */
 .code-search-hit {
   background: rgba(234, 92, 0, 0.33);
-  outline: 1px solid rgba(246, 178, 107, 0.8);
+  outline: 1px solid rgba(246, 178, 107, 0.7);
   border-radius: 1px;
 }
 .code-search-hit--active {
@@ -163,15 +168,7 @@
 }
 
 /* ---- Show / hide ---- */
-.code-search--hidden .code-search-wrapper {
-  display: none;
-}
-.code-search--hidden .code-search-toggle {
-  display: flex;
-}
-.code-search--shown .code-search-wrapper {
-  display: flex;
-}
-.code-search--shown .code-search-toggle {
-  display: none;
-}
+.code-search--hidden .code-search-wrapper  { display: none; }
+.code-search--hidden .code-search-toggle   { display: flex; }
+.code-search--shown  .code-search-wrapper  { display: flex; }
+.code-search--shown  .code-search-toggle   { display: none; }
