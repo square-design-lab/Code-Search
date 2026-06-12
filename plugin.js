@@ -45,12 +45,12 @@
   function ensureExternalStylesInjected() {
     return new Promise(function (resolve) {
       var head = doc.head || doc.getElementsByTagName("head")[0];
-      if (!head || doc.getElementById("css-search-stylesheet")) {
+      if (!head || doc.getElementById("code-search-stylesheet")) {
         resolve();
         return;
       }
       var link = doc.createElement("link");
-      link.id = "css-search-stylesheet";
+      link.id = "code-search-stylesheet";
       link.rel = "stylesheet";
       link.href = buildCacheBustedUrl(CSS_URL);
       link.onload = function () {
@@ -100,7 +100,7 @@
 
   // Removes any leftover search widgets inside an editor (guards duplicates).
   function clearWidgetsIn(cmRoot) {
-    var existing = cmRoot.querySelectorAll(".css-search-container");
+    var existing = cmRoot.querySelectorAll(".code-search-container");
     for (var i = 0; i < existing.length; i++) {
       if (existing[i].parentNode) existing[i].parentNode.removeChild(existing[i]);
     }
@@ -131,28 +131,28 @@
     var label = detectEditorLabel(cmRoot);
 
     var container = doc.createElement("div");
-    container.className = "css-search-container";
+    container.className = "code-search-container";
 
-    var toggle = makeIconButton("css-search-toggle", "Find (Ctrl/Cmd+F)", ICONS.search);
+    var toggle = makeIconButton("code-search-toggle", "Find (Ctrl/Cmd+F)", ICONS.search);
 
     var wrapper = doc.createElement("div");
-    wrapper.className = "css-search-wrapper";
+    wrapper.className = "code-search-wrapper";
 
     var bar = doc.createElement("div");
-    bar.className = "css-search-bar";
+    bar.className = "code-search-bar";
 
     var inputContainer = doc.createElement("div");
-    inputContainer.className = "css-search-input-container";
+    inputContainer.className = "code-search-input-container";
 
     var input = doc.createElement("input");
     input.type = "text";
-    input.className = "css-search-input";
+    input.className = "code-search-input";
     input.placeholder = "Find" + (label ? " in " + label : "");
     input.autocomplete = "off";
     input.spellcheck = false;
 
     var count = doc.createElement("span");
-    count.className = "css-search-count";
+    count.className = "code-search-count";
     count.textContent = "";
 
     inputContainer.appendChild(input);
@@ -160,22 +160,22 @@
 
     // Option toggles: Aa / ab / .*
     var options = doc.createElement("div");
-    options.className = "css-search-options";
-    var caseBtn = makeIconButton("css-search-opt", "Match Case", "Aa");
+    options.className = "code-search-options";
+    var caseBtn = makeIconButton("code-search-opt", "Match Case", "Aa");
     caseBtn.setAttribute("data-opt", "case");
-    var wordBtn = makeIconButton("css-search-opt", "Match Whole Word", "ab");
+    var wordBtn = makeIconButton("code-search-opt", "Match Whole Word", "ab");
     wordBtn.setAttribute("data-opt", "word");
-    var regexBtn = makeIconButton("css-search-opt", "Use Regular Expression", ".*");
+    var regexBtn = makeIconButton("code-search-opt", "Use Regular Expression", ".*");
     regexBtn.setAttribute("data-opt", "regex");
     options.appendChild(caseBtn);
     options.appendChild(wordBtn);
     options.appendChild(regexBtn);
 
     var nav = doc.createElement("div");
-    nav.className = "css-search-nav";
-    var prev = makeIconButton("css-search-arrow", "Previous match (Shift+Enter)", ICONS.up);
-    var next = makeIconButton("css-search-arrow", "Next match (Enter)", ICONS.down);
-    var close = makeIconButton("css-search-close", "Close (Esc)", ICONS.close);
+    nav.className = "code-search-nav";
+    var prev = makeIconButton("code-search-arrow", "Previous match (Shift+Enter)", ICONS.up);
+    var next = makeIconButton("code-search-arrow", "Next match (Enter)", ICONS.down);
+    var close = makeIconButton("code-search-close", "Close (Esc)", ICONS.close);
     nav.appendChild(prev);
     nav.appendChild(next);
     nav.appendChild(close);
@@ -185,9 +185,9 @@
     bar.appendChild(nav);
 
     var credit = doc.createElement("p");
-    credit.className = "css-search-credit";
+    credit.className = "code-search-credit";
     credit.innerHTML =
-      '<span class="css-search-credit-text">built by <a href="https://squaredesignlab.com" target="_blank" rel="noopener noreferrer">squaredesignlab.com</a></span>';
+      '<span class="code-search-credit-text">built by <a href="https://squaredesignlab.com" target="_blank" rel="noopener noreferrer">squaredesignlab.com</a></span>';
 
     wrapper.appendChild(bar);
     wrapper.appendChild(credit);
@@ -241,7 +241,7 @@
       while ((match = regex.exec(text)) !== null) {
         var from = cm.posFromIndex(match.index);
         var to = cm.posFromIndex(match.index + match[0].length);
-        cmMarks.push(cm.markText(from, to, {className: "css-search-hit"}));
+        cmMarks.push(cm.markText(from, to, {className: "code-search-hit"}));
         ranges.push({from: from, to: to});
         if (match[0].length === 0) regex.lastIndex++; // guard zero-length
       }
@@ -264,7 +264,7 @@
           );
         }
         var mark = doc.createElement("mark");
-        mark.className = "css-search-hit";
+        mark.className = "code-search-hit";
         mark.textContent = match[0];
         fragment.appendChild(mark);
         createdMarks.push(mark);
@@ -329,7 +329,7 @@
       if (cm) {
         clearCmMarks();
       } else if (codeRootEl) {
-        var marks = codeRootEl.querySelectorAll(".css-search-hit");
+        var marks = codeRootEl.querySelectorAll(".code-search-hit");
         marks.forEach(function (mark) {
           var parent = mark.parentNode;
           if (!parent) return;
@@ -358,10 +358,10 @@
         } catch (_e) {}
       } else {
         currentMatches.forEach(function (el) {
-          el.classList && el.classList.remove("css-search-hit--active");
+          el.classList && el.classList.remove("code-search-hit--active");
         });
         if (active && active.classList) {
-          active.classList.add("css-search-hit--active");
+          active.classList.add("code-search-hit--active");
           if (shouldScroll && typeof active.scrollIntoView === "function") {
             try {
               active.scrollIntoView({
@@ -401,12 +401,12 @@
 
     // ---- Open / close ----
     function isOpen() {
-      return container.classList.contains("css-search--shown");
+      return container.classList.contains("code-search--shown");
     }
 
     function setOpen(shouldShow) {
-      container.classList.toggle("css-search--shown", !!shouldShow);
-      container.classList.toggle("css-search--hidden", !shouldShow);
+      container.classList.toggle("code-search--shown", !!shouldShow);
+      container.classList.toggle("code-search--hidden", !shouldShow);
       if (!shouldShow) {
         removeHighlights();
         updateCounter(false);

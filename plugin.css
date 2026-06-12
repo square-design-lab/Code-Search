@@ -4,19 +4,19 @@
    CodeMirror editor, so it never pushes or blocks the code below it.
    =========================================================================== */
 
-.css-search-container {
+.code-search-container {
   position: sticky;
   top: 0;
   z-index: 6;
   height: 0;            /* anchor only — takes no vertical space */
   pointer-events: none; /* let clicks fall through the empty strip... */
 }
-.css-search-container > * {
+.code-search-container > * {
   pointer-events: auto; /* ...but keep the icon/widget interactive */
 }
 
 /* ---- Collapsed state: just a search icon, top-right ---- */
-.css-search-toggle {
+.code-search-toggle {
   position: absolute;
   top: 8px;
   right: 14px;
@@ -24,7 +24,7 @@
 }
 
 /* ---- Expanded state: floating compact widget, top-right ---- */
-.css-search-wrapper {
+.code-search-wrapper {
   position: absolute;
   top: 6px;
   right: 12px;
@@ -41,13 +41,13 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.36);
 }
 
-.css-search-bar {
+.code-search-bar {
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
-.css-search-input-container {
+.code-search-input-container {
   display: flex;
   align-items: center;
   flex: 1 1 auto;
@@ -57,14 +57,14 @@
   border: 1px solid transparent;
   border-radius: 3px;
 }
-.css-search-input-container:focus-within {
+.code-search-input-container:focus-within {
   border-color: #007fd4;
 }
-.css-search-input-container.is-invalid {
+.code-search-input-container.is-invalid {
   border-color: #be1100;
 }
 
-.css-search-input {
+.code-search-input {
   flex: 1 1 auto;
   min-width: 0;
   padding: 2px 4px;
@@ -76,11 +76,11 @@
   font-size: 12px;
   line-height: 22px;
 }
-.css-search-input::placeholder {
+.code-search-input::placeholder {
   color: #a6a6a6;
 }
 
-.css-search-count {
+.code-search-count {
   flex: 0 0 auto;
   padding-left: 6px;
   font-size: 11px;
@@ -89,14 +89,14 @@
   opacity: 0.85;
 }
 
-.css-search-options,
-.css-search-nav {
+.code-search-options,
+.code-search-nav {
   display: inline-flex;
   align-items: center;
   gap: 2px;
 }
 
-.css-search-container .icon-container {
+.code-search-container .icon-container {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -109,69 +109,69 @@
   border-radius: 4px;
   color: #c5c5c5;
 }
-.css-search-container .icon-container:hover {
+.code-search-container .icon-container:hover {
   background: rgba(255, 255, 255, 0.12);
 }
-.css-search-container .icon-container svg {
+.code-search-container .icon-container svg {
   width: 15px;
   height: 15px;
 }
 
 /* Option toggles: Aa (case) / ab (whole word) / .* (regex) */
-.css-search-opt {
+.code-search-opt {
   width: 22px;
   height: 22px;
   font-size: 12px;
   font-weight: 600;
   line-height: 1;
 }
-.css-search-opt[data-opt="word"] {
+.code-search-opt[data-opt="word"] {
   text-decoration: underline;
 }
-.css-search-opt.is-active {
+.code-search-opt.is-active {
   background: rgba(0, 127, 212, 0.45);
   color: #ffffff;
 }
 
-.css-search-credit {
+.code-search-credit {
   margin: 0;
   padding: 0 2px;
   text-align: right;
   font-size: 10px;
 }
-.css-search-credit-text {
+.code-search-credit-text {
   color: #8c8c8c;
 }
-.css-search-credit-text a {
+.code-search-credit-text a {
   color: #9cdcfe;
   text-decoration: none;
   border-bottom: 0;
 }
-.css-search-credit-text a:hover {
+.code-search-credit-text a:hover {
   text-decoration: underline;
 }
 
 /* ---- Match highlights inside the code ---- */
-.css-search-hit {
+.code-search-hit {
   background: rgba(234, 92, 0, 0.33);
   outline: 1px solid rgba(246, 178, 107, 0.8);
   border-radius: 1px;
 }
-.css-search-hit--active {
+.code-search-hit--active {
   background: rgba(234, 92, 0, 0.66);
   outline: 1px solid #f6b26b;
 }
 
 /* ---- Show / hide ---- */
-.css-search--hidden .css-search-wrapper {
+.code-search--hidden .code-search-wrapper {
   display: none;
 }
-.css-search--hidden .css-search-toggle {
+.code-search--hidden .code-search-toggle {
   display: flex;
 }
-.css-search--shown .css-search-wrapper {
+.code-search--shown .code-search-wrapper {
   display: flex;
 }
-.css-search--shown .css-search-toggle {
+.code-search--shown .code-search-toggle {
   display: none;
 }
