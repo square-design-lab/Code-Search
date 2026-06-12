@@ -11,6 +11,10 @@
   var POLL_INTERVAL_MS = 800;
   // Editors shorter than this (px) are 1-line UI widgets, not real code fields.
   var MIN_EDITOR_HEIGHT = 80;
+  // Cap highlights to avoid blocking the UI thread on large editors.
+  var MAX_MATCHES = 200;
+  // Debounce delay (ms) — search fires this long after the user stops typing.
+  var SEARCH_DEBOUNCE_MS = 250;
 
   var win = window.top;
   var doc = win.document;
@@ -186,7 +190,8 @@
         return;
       }
       // "ok"
-      count.textContent = (currentIndex + 1) + "/" + currentMatches.length;
+      var total = currentMatches.length >= MAX_MATCHES ? MAX_MATCHES + "+" : currentMatches.length;
+      count.textContent = (currentIndex + 1) + "/" + total;
       message.style.display = "none";
     }
 
@@ -201,15 +206,39 @@
     function collectCmMatches(regex) {
       clearCmMarks();
       var text = cm.getValue();
-      var ranges = [];
+      // Precompute line-start char offsets once — O(text.length).
+      // This lets us convert a char index to {line,ch} with binary search in
+      // O(log lines) instead of using cm.posFromIndex which is O(lines) per call.
+      var lineStarts = [0];
+      for (var ci = 0; ci < text.length; ci++) {
+        if (text[ci] === "\n") lineStarts.push(ci + 1);
+      }
+      function indexToPos(idx) {
+        var lo = 0, hi = lineStarts.length - 1;
+        while (lo < hi) {
+          var mid = (lo + hi + 1) >> 1;
+          if (lineStarts[mid] <= idx) lo = mid; else hi = mid - 1;
+        }
+        return {line: lo, ch: idx - lineStarts[lo]};
+      }
+      // Collect raw positions first (no CM calls yet)
+      var rawMatches = [];
       var match;
       while ((match = regex.exec(text)) !== null) {
-        var from = cm.posFromIndex(match.index);
-        var to   = cm.posFromIndex(match.index + match[0].length);
-        cmMarks.push(cm.markText(from, to, {className: "code-search-hit"}));
-        ranges.push({from: from, to: to});
+        if (rawMatches.length >= MAX_MATCHES) break;
+        rawMatches.push({start: match.index, end: match.index + match[0].length});
         if (match[0].length === 0) regex.lastIndex++;
       }
+      // Batch all markText calls in one cm.operation() so CodeMirror flushes DOM once.
+      var ranges = [];
+      cm.operation(function () {
+        for (var i = 0; i < rawMatches.length; i++) {
+          var from = indexToPos(rawMatches[i].start);
+          var to   = indexToPos(rawMatches[i].end);
+          cmMarks.push(cm.markText(from, to, {className: "code-search-hit"}));
+          ranges.push({from: from, to: to});
+        }
+      });
       return ranges;
     }
 
@@ -335,7 +364,12 @@
     }
 
     // ---- Events ----
-    input.addEventListener("input", runSearch);
+    var searchDebounceTimer = null;
+    function debouncedSearch() {
+      if (searchDebounceTimer) win.clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = win.setTimeout(runSearch, SEARCH_DEBOUNCE_MS);
+    }
+    input.addEventListener("input", debouncedSearch);
     input.addEventListener("keydown", function (e) {
       if (e.key === "Enter") { e.preventDefault(); e.shiftKey ? goPrev() : goNext(); }
       else if (e.key === "Escape") { e.preventDefault(); setOpen(false); }
