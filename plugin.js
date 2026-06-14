@@ -98,9 +98,13 @@
     var codeRootEl = cmRoot.querySelector(".CodeMirror-code");
 
     var opts = {caseSensitive: false};
+    // currentMatches: raw char-index pairs [{start,end}] — no CM positions stored.
+    // lineStarts: precomputed newline offsets for fast binary-search index→pos conversion.
+    // activeMark: the single markText mark for the currently highlighted match.
     var currentMatches = [];
     var currentIndex = -1;
-    var cmMarks = [];
+    var lineStarts = [];
+    var activeMark = null;
 
     clearWidgetsIn(cmRoot);
     cmRoot.setAttribute("data-sdl-search", "1");
@@ -196,50 +200,38 @@
     }
 
     // ---- CodeMirror highlighting ----
-    function clearCmMarks() {
-      for (var i = 0; i < cmMarks.length; i++) {
-        try { cmMarks[i].clear(); } catch (_e) {}
+    // Binary search: convert a char index to a CM {line, ch} position using the
+    // precomputed lineStarts array. O(log lines) vs cm.posFromIndex's O(lines).
+    function indexToPos(idx) {
+      var lo = 0, hi = lineStarts.length - 1;
+      while (lo < hi) {
+        var mid = (lo + hi + 1) >> 1;
+        if (lineStarts[mid] <= idx) lo = mid; else hi = mid - 1;
       }
-      cmMarks = [];
+      return {line: lo, ch: idx - lineStarts[lo]};
+    }
+
+    function clearActiveMark() {
+      if (activeMark) { try { activeMark.clear(); } catch (_e) {} activeMark = null; }
     }
 
     function collectCmMatches(regex) {
-      clearCmMarks();
+      clearActiveMark();
       var text = cm.getValue();
-      // Precompute line-start char offsets once — O(text.length).
-      // This lets us convert a char index to {line,ch} with binary search in
-      // O(log lines) instead of using cm.posFromIndex which is O(lines) per call.
-      var lineStarts = [0];
+      // Build lineStarts once — O(text.length). Kept in closure for setActiveHit.
+      lineStarts = [0];
       for (var ci = 0; ci < text.length; ci++) {
         if (text[ci] === "\n") lineStarts.push(ci + 1);
       }
-      function indexToPos(idx) {
-        var lo = 0, hi = lineStarts.length - 1;
-        while (lo < hi) {
-          var mid = (lo + hi + 1) >> 1;
-          if (lineStarts[mid] <= idx) lo = mid; else hi = mid - 1;
-        }
-        return {line: lo, ch: idx - lineStarts[lo]};
-      }
-      // Collect raw positions first (no CM calls yet)
-      var rawMatches = [];
+      // Collect raw char indices only — zero CM API calls here.
+      var raw = [];
       var match;
       while ((match = regex.exec(text)) !== null) {
-        if (rawMatches.length >= MAX_MATCHES) break;
-        rawMatches.push({start: match.index, end: match.index + match[0].length});
+        if (raw.length >= MAX_MATCHES) break;
+        raw.push({start: match.index, end: match.index + match[0].length});
         if (match[0].length === 0) regex.lastIndex++;
       }
-      // Batch all markText calls in one cm.operation() so CodeMirror flushes DOM once.
-      var ranges = [];
-      cm.operation(function () {
-        for (var i = 0; i < rawMatches.length; i++) {
-          var from = indexToPos(rawMatches[i].start);
-          var to   = indexToPos(rawMatches[i].end);
-          cmMarks.push(cm.markText(from, to, {className: "code-search-hit"}));
-          ranges.push({from: from, to: to});
-        }
-      });
-      return ranges;
+      return raw;
     }
 
     // ---- DOM highlighting (fallback) ----
@@ -291,7 +283,8 @@
 
     function removeHighlights() {
       if (cm) {
-        clearCmMarks();
+        clearActiveMark();
+        lineStarts = [];
       } else if (codeRootEl) {
         var hits = codeRootEl.querySelectorAll(".code-search-hit");
         hits.forEach(function (h) {
@@ -321,22 +314,27 @@
     function setActiveHit(index, scroll) {
       if (!currentMatches.length) return;
       currentIndex = Math.max(0, Math.min(index, currentMatches.length - 1));
-      var active = currentMatches[currentIndex];
+      var raw = currentMatches[currentIndex];
       if (cm) {
+        // Convert only the ONE active match — 2 binary searches, zero freezing.
+        clearActiveMark();
+        var from = indexToPos(raw.start);
+        var to   = indexToPos(raw.end);
+        try { activeMark = cm.markText(from, to, {className: "code-search-hit code-search-hit--active"}); } catch (_e) {}
+        try { if (typeof cm.setSelection === "function") cm.setSelection(from, to); } catch (_e) {}
         try {
-          if (typeof cm.setSelection === "function") cm.setSelection(active.from, active.to);
           if (scroll && typeof cm.scrollIntoView === "function")
-            cm.scrollIntoView({from: active.from, to: active.to}, 80);
+            cm.scrollIntoView({from: from, to: to}, 80);
         } catch (_e) {}
       } else {
         currentMatches.forEach(function (el) {
           el.classList && el.classList.remove("code-search-hit--active");
         });
-        if (active && active.classList) {
-          active.classList.add("code-search-hit--active");
+        if (raw && raw.classList) {
+          raw.classList.add("code-search-hit--active");
           if (scroll) {
-            try { active.scrollIntoView({block: "center", inline: "nearest", behavior: "instant"}); }
-            catch (_e) { try { active.scrollIntoView(); } catch (_e2) {} }
+            try { raw.scrollIntoView({block: "center", inline: "nearest", behavior: "instant"}); }
+            catch (_e) { try { raw.scrollIntoView(); } catch (_e2) {} }
           }
         }
       }
