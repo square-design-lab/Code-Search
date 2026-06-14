@@ -98,13 +98,11 @@
     var codeRootEl = cmRoot.querySelector(".CodeMirror-code");
 
     var opts = {caseSensitive: false};
-    // currentMatches: raw char-index pairs [{start,end}] — no CM positions stored.
-    // lineStarts: precomputed newline offsets for fast binary-search index→pos conversion.
-    // activeMark: the single markText mark for the currently highlighted match.
-    var currentMatches = [];
+    var currentMatches = []; // [{from,to}] CM positions for each match
     var currentIndex = -1;
-    var lineStarts = [];
-    var activeMark = null;
+    var lineStarts = [];     // precomputed newline offsets for binary-search index→pos
+    var cmMarks = [];        // one TextMarker per match (code-search-hit)
+    var activeMark = null;   // overlay TextMarker for the active match (code-search-hit--active)
 
     clearWidgetsIn(cmRoot);
     cmRoot.setAttribute("data-sdl-search", "1");
@@ -168,10 +166,19 @@
     container.appendChild(toggle);
     container.appendChild(wrapper);
 
-    // Insert before .CodeMirror-scroll so we don't disturb CodeMirror's textarea
-    var scrollEl = cmRoot.querySelector(".CodeMirror-scroll");
-    if (scrollEl) cmRoot.insertBefore(container, scrollEl);
-    else cmRoot.prepend(container);
+    // Full-height editors (viewportMargin:Infinity, e.g. code injection) render all lines
+    // and the parent panel scrolls — not CodeMirror-scroll. Inserting inside .CodeMirror
+    // (which is overflow:hidden) blocks position:sticky, so we insert as a sibling before
+    // .CodeMirror in its parent and make the container sticky there instead.
+    var isFullHeight = (cm && typeof cm.getOption === "function" && cm.getOption("viewportMargin") === Infinity);
+    if (isFullHeight && cmRoot.parentElement) {
+      container.classList.add("code-search--fullheight");
+      cmRoot.parentElement.insertBefore(container, cmRoot);
+    } else {
+      var scrollEl = cmRoot.querySelector(".CodeMirror-scroll");
+      if (scrollEl) cmRoot.insertBefore(container, scrollEl);
+      else cmRoot.prepend(container);
+    }
 
     // ---- Counter ----
     function updateCounter(state) {
@@ -215,15 +222,25 @@
       if (activeMark) { try { activeMark.clear(); } catch (_e) {} activeMark = null; }
     }
 
-    function collectCmMatches(regex) {
+    function clearAllCmMarks() {
       clearActiveMark();
+      if (cmMarks.length) {
+        cm.operation(function () {
+          for (var i = 0; i < cmMarks.length; i++) { try { cmMarks[i].clear(); } catch (_e) {} }
+        });
+        cmMarks = [];
+      }
+    }
+
+    function collectCmMatches(regex) {
+      clearAllCmMarks();
       var text = cm.getValue();
-      // Build lineStarts once — O(text.length). Kept in closure for setActiveHit.
+      // Build lineStarts once — O(text.length). Binary search replaces cm.posFromIndex (O(lines)).
       lineStarts = [0];
       for (var ci = 0; ci < text.length; ci++) {
         if (text[ci] === "\n") lineStarts.push(ci + 1);
       }
-      // Collect raw char indices only — zero CM API calls here.
+      // Phase 1: collect raw char-index pairs — zero CM API calls.
       var raw = [];
       var match;
       while ((match = regex.exec(text)) !== null) {
@@ -231,7 +248,17 @@
         raw.push({start: match.index, end: match.index + match[0].length});
         if (match[0].length === 0) regex.lastIndex++;
       }
-      return raw;
+      // Phase 2: mark all matches in one cm.operation() — single DOM flush.
+      var ranges = [];
+      cm.operation(function () {
+        for (var i = 0; i < raw.length; i++) {
+          var from = indexToPos(raw[i].start);
+          var to   = indexToPos(raw[i].end);
+          cmMarks.push(cm.markText(from, to, {className: "code-search-hit"}));
+          ranges.push({from: from, to: to});
+        }
+      });
+      return ranges;
     }
 
     // ---- DOM highlighting (fallback) ----
@@ -283,7 +310,7 @@
 
     function removeHighlights() {
       if (cm) {
-        clearActiveMark();
+        clearAllCmMarks();
         lineStarts = [];
       } else if (codeRootEl) {
         var hits = codeRootEl.querySelectorAll(".code-search-hit");
@@ -314,27 +341,25 @@
     function setActiveHit(index, scroll) {
       if (!currentMatches.length) return;
       currentIndex = Math.max(0, Math.min(index, currentMatches.length - 1));
-      var raw = currentMatches[currentIndex];
+      var active = currentMatches[currentIndex];
       if (cm) {
-        // Convert only the ONE active match — 2 binary searches, zero freezing.
+        // Overlay one active mark on top of the existing hit marks (1 clear + 1 markText).
         clearActiveMark();
-        var from = indexToPos(raw.start);
-        var to   = indexToPos(raw.end);
-        try { activeMark = cm.markText(from, to, {className: "code-search-hit code-search-hit--active"}); } catch (_e) {}
-        try { if (typeof cm.setSelection === "function") cm.setSelection(from, to); } catch (_e) {}
+        try { activeMark = cm.markText(active.from, active.to, {className: "code-search-hit--active"}); } catch (_e) {}
+        try { if (typeof cm.setSelection === "function") cm.setSelection(active.from, active.to); } catch (_e) {}
         try {
           if (scroll && typeof cm.scrollIntoView === "function")
-            cm.scrollIntoView({from: from, to: to}, 80);
+            cm.scrollIntoView({from: active.from, to: active.to}, 80);
         } catch (_e) {}
       } else {
         currentMatches.forEach(function (el) {
           el.classList && el.classList.remove("code-search-hit--active");
         });
-        if (raw && raw.classList) {
-          raw.classList.add("code-search-hit--active");
+        if (active && active.classList) {
+          active.classList.add("code-search-hit--active");
           if (scroll) {
-            try { raw.scrollIntoView({block: "center", inline: "nearest", behavior: "instant"}); }
-            catch (_e) { try { raw.scrollIntoView(); } catch (_e2) {} }
+            try { active.scrollIntoView({block: "center", inline: "nearest", behavior: "instant"}); }
+            catch (_e) { try { active.scrollIntoView(); } catch (_e2) {} }
           }
         }
       }
